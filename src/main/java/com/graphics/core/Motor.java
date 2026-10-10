@@ -3,6 +3,8 @@ package com.graphics.core;
 import com.graphics.modelos.Ciudad;
 import com.graphics.modelos.AutoModelo;
 import com.graphics.conduccion.Auto;
+import com.graphics.conduccion.SistemaEntregas;
+import com.graphics.ui.MenuAyudaUI;
 import org.lwjgl.glfw.Callbacks;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GL;
@@ -14,10 +16,7 @@ public class Motor {
     protected int alto = 760;
     
     private Renderizador renderizador;
-    private com.graphics.modelos.Entorno entornoActual;
     private com.graphics.modelos.Ciudad ciudad;
-    private com.graphics.modelos.PistaCarrera pista;
-    private com.graphics.modelos.Monte monte;
     
     private Auto auto;
     private AutoModelo autoModelo;
@@ -26,21 +25,22 @@ public class Motor {
     private java.util.List<com.graphics.conduccion.Particula> particulas = new java.util.ArrayList<>();
     private boolean camaraAerea = false;
     private com.graphics.ui.PanelUI panelUI;
+    private MenuAyudaUI menuAyuda;
+    private SistemaEntregas sistemaEntregas;
 
     // Variables para la cámara libre con el ratón
     private float camaraYaw = 180;
     private float camaraPitch = 15;
     private double lastMouseX = -1, lastMouseY = -1;
     
-    // Iluminacion
+    // Iluminacion y Controles
     private boolean esDeDia = true;
     private boolean farosEncendidos = true;
-    
-    // UI
     private boolean mostrarMinimapa = true;
+    private boolean mostrarAyuda = false;
     
     // Ciclo del Dia
-    private float tiempoCiclo = 0;
+    private float tiempoCiclo = 15.0f; // Empieza a pleno día
     private float duracionDiaCompleto = 60.0f; // 60 segundos por ciclo completo
     
     private float lerp(float a, float b, float f) {
@@ -69,7 +69,7 @@ public class Motor {
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         
-        ventana = glfwCreateWindow(ancho, alto, "Ciudad Conduccion - Refactor Modular", 0, 0);
+        ventana = glfwCreateWindow(ancho, alto, "Ciudad y Conducción", 0, 0);
         if (ventana == 0) throw new IllegalStateException("No se pudo crear la ventana OpenGL");
         
         glfwMakeContextCurrent(ventana);
@@ -79,26 +79,29 @@ public class Motor {
         renderizador = new Renderizador();
         renderizador.inicializar();
         panelUI = new com.graphics.ui.PanelUI();
+        menuAyuda = new MenuAyudaUI();
+        sistemaEntregas = new SistemaEntregas();
         
         ciudad = new com.graphics.modelos.Ciudad();
-        pista = new com.graphics.modelos.PistaCarrera();
-        monte = new com.graphics.modelos.Monte(renderizador);
         
-        entornoActual = ciudad;
-        
-        auto = new Auto(entornoActual);
+        auto = new Auto(ciudad);
         autoModelo = new AutoModelo(auto);
         
-        // Tráfico autónomo (Solo en ciudad por ahora, pero los instanciamos)
-        npcs[0] = new com.graphics.conduccion.AutoNPC(entornoActual, -80, -20, (float) Math.PI / 2); // Calle izquierda
-        npcs[1] = new com.graphics.conduccion.AutoNPC(entornoActual, 80, -20, -(float) Math.PI / 2); // Calle derecha
-        npcs[2] = new com.graphics.conduccion.AutoNPC(entornoActual, 20, 80, 0); // Zona residencial
+        // Tráfico autónomo: Rutas cerradas por las calles de la gran ciudad
+        // NPC 0 (Azul): Circuito Oeste / Downtown en calles
+        float[][] ruta0 = {{-80f, -80f}, {-80f, 10f}, {-40f, 10f}, {-40f, -80f}};
+        // NPC 1 (Rojo): Circuito Este / Residencial en calles
+        float[][] ruta1 = {{40f, -80f}, {70f, -80f}, {70f, 40f}, {40f, 40f}};
+        // NPC 2 (Verde): Gran Circuito Trans-urbano cruzando los puentes sobre el río
+        float[][] ruta2 = {{-40f, -20f}, {40f, -20f}, {40f, 70f}, {-40f, 70f}};
+
+        npcs[0] = new com.graphics.conduccion.AutoNPC(ciudad, ruta0, 8.0f, 0.2f, 0.2f, 0.85f);
+        npcs[1] = new com.graphics.conduccion.AutoNPC(ciudad, ruta1, 7.5f, 0.85f, 0.2f, 0.2f);
+        npcs[2] = new com.graphics.conduccion.AutoNPC(ciudad, ruta2, 8.5f, 0.2f, 0.8f, 0.2f);
+
         for (int i = 0; i < 3; i++) {
             npcModelos[i] = new AutoModelo(npcs[i]);
-            // Modificamos color de chasis de NPCs para distinguirlos
-            if (i == 0) { npcModelos[i].setColorChasis(0.2f, 0.2f, 0.8f); npcs[i].setColor(0.2f, 0.2f, 0.8f); } // Azul
-            if (i == 1) { npcModelos[i].setColorChasis(0.8f, 0.2f, 0.2f); npcs[i].setColor(0.8f, 0.2f, 0.2f); } // Rojo
-            if (i == 2) { npcModelos[i].setColorChasis(0.2f, 0.8f, 0.2f); npcs[i].setColor(0.2f, 0.8f, 0.2f); } // Verde
+            npcModelos[i].setColorChasis(npcs[i].getChasisR(), npcs[i].getChasisG(), npcs[i].getChasisB());
         }
         
         glfwSetInputMode(ventana, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -124,25 +127,23 @@ public class Motor {
             if (action == GLFW_PRESS) {
                 if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(ventana, true);
                 if (key == GLFW_KEY_C) camaraAerea = !camaraAerea;
-                if (key == GLFW_KEY_R) { auto.reiniciar(); panelUI.reiniciar(); }
+                if (key == GLFW_KEY_R) {
+                    auto.reiniciar();
+                    sistemaEntregas.reiniciar();
+                    ciudad.reiniciar();
+                    for (int i = 0; i < 3; i++) npcs[i].reiniciar();
+                    particulas.clear();
+                    panelUI.reiniciar();
+                }
+                if (key == GLFW_KEY_N) {
+                    esDeDia = !esDeDia;
+                    tiempoCiclo = esDeDia ? 15.0f : 48.0f;
+                }
                 if (key == GLFW_KEY_F) farosEncendidos = !farosEncendidos;
                 if (key == GLFW_KEY_M) mostrarMinimapa = !mostrarMinimapa;
-                if (key == GLFW_KEY_1) cambiarEntorno(ciudad);
-                if (key == GLFW_KEY_2) cambiarEntorno(pista);
-                if (key == GLFW_KEY_3) cambiarEntorno(monte);
+                if (key == GLFW_KEY_P) mostrarAyuda = !mostrarAyuda;
             }
         });
-    }
-    
-    private void cambiarEntorno(com.graphics.modelos.Entorno nuevoEntorno) {
-        entornoActual = nuevoEntorno;
-        auto.setEntorno(entornoActual);
-        for (int i = 0; i < 3; i++) {
-            npcs[i].setEntorno(entornoActual);
-            npcs[i].reiniciar();
-        }
-        particulas.clear();
-        panelUI.reiniciar();
     }
 
     private void loop() {
@@ -166,6 +167,12 @@ public class Motor {
             auto.setTurbo(turbo);
             auto.actualizar(deltaTime, adelante, atras, izquierda, derecha, freno);
             
+            // Actualizar entregas
+            sistemaEntregas.actualizar(deltaTime, auto, particulas);
+            
+            // Procesar choques destructibles contra semáforos, farolas, bancas y señales
+            ciudad.verificarImpactosDestructibles(auto, particulas);
+            
             if (turbo && Math.abs(auto.getVelocidad()) > 10.0f && !auto.isDestruido()) {
                 float fX = -(float) Math.sin(auto.getAngulo());
                 float fZ = -(float) Math.cos(auto.getAngulo());
@@ -176,51 +183,42 @@ public class Motor {
                     float velX = -fX * 15f + (float) (Math.random() * 6 - 3);
                     float velY = (float) (Math.random() * 2);
                     float velZ = -fZ * 15f + (float) (Math.random() * 6 - 3);
-                    // Fuego: Rojo/Naranja/Amarillo
                     particulas.add(new com.graphics.conduccion.Particula(pX, auto.getY() + 0.3f, pZ, velX, velY, velZ, 1.0f, (float)Math.random()*0.6f, 0.0f, 0.4f + (float)Math.random()*0.3f));
                 }
             }
             
             if (jugadorEstabaVivo && auto.isDestruido()) {
-                // El jugador acaba de morir
                 float fX = -(float) Math.sin(auto.getAngulo());
                 float fZ = -(float) Math.cos(auto.getAngulo());
-                
-                // Super explosión
                 for (int i = 0; i < 60; i++) {
                     float velX = fX * auto.getVelocidad() * 0.5f + (float) (Math.random() * 30 - 15);
                     float velY = 15f + (float) (Math.random() * 25);
                     float velZ = fZ * auto.getVelocidad() * 0.5f + (float) (Math.random() * 30 - 15);
-                    
                     float pR = (Math.random() > 0.5) ? 0.7f : 0.1f;
                     float pG = (Math.random() > 0.5) ? 0.1f : 0.1f;
-                    float pB = (Math.random() > 0.5) ? 0.15f : 0.1f; // Rojo oscuro o gris
-                    
+                    float pB = (Math.random() > 0.5) ? 0.15f : 0.1f;
                     float size = 0.3f + (float) Math.random() * 0.8f;
-                    
                     particulas.add(new com.graphics.conduccion.Particula(auto.getX(), auto.getY() + 1.0f, auto.getZ(), velX, velY, velZ, pR, pG, pB, size));
                 }
             }
             
+            // Actualizar tráfico autónomo
             for (int i = 0; i < 3; i++) {
                 npcs[i].actualizar(deltaTime, false, false, false, false, false);
                 
-                // Chequear colision del jugador con NPC para explosion
+                // Colisión con NPC
                 if (!npcs[i].isDestruido()) {
                     float dx = auto.getX() - npcs[i].getX();
                     float dz = auto.getZ() - npcs[i].getZ();
-                    if (dx*dx + dz*dz < 3.0f * 3.0f && Math.abs(auto.getVelocidad()) > 5.0f) { // Choca y explota
+                    if (dx*dx + dz*dz < 3.2f * 3.2f && Math.abs(auto.getVelocidad()) > 5.0f) {
                         float fX = -(float) Math.sin(auto.getAngulo());
                         float fZ = -(float) Math.cos(auto.getAngulo());
                         npcs[i].explotar(particulas, Math.abs(auto.getVelocidad()), fX, fZ);
-                        
-                        // Rebote del jugador
-                        // Accedemos indirectamente o ignoramos, ya que atravesarlo al destruirlo es divertido
                     }
                 }
             }
             
-            // Actualizar particulas y eliminar las muertas
+            // Actualizar partículas
             java.util.Iterator<com.graphics.conduccion.Particula> it = particulas.iterator();
             while(it.hasNext()) {
                 com.graphics.conduccion.Particula p = it.next();
@@ -228,11 +226,9 @@ public class Motor {
                 if (!p.estaViva()) it.remove();
             }
             
-            entornoActual.actualizar(deltaTime);
+            ciudad.actualizar(deltaTime);
             
-            int kilometrosPorHora = Math.round(Math.abs(auto.getVelocidad()) * 3.6f);
-            glfwSetWindowTitle(ventana, "Auto Modular | WASD: conducir | C: cámara | R: reiniciar | " + kilometrosPorHora + " km/h");
-            
+            // Redimensionamiento de ventana
             int[] anchoReal = new int[1], altoReal = new int[1];
             glfwGetFramebufferSize(ventana, anchoReal, altoReal);
             ancho = anchoReal[0];
@@ -250,6 +246,23 @@ public class Motor {
                 else if (fase < 4.0f) uDia = 1.0f; // Día
                 else if (fase < 5.0f) uDia = 1.0f - (fase - 4.0f); // Atardece
                 else uDia = 0.0f; // Noche
+
+                // Actualizar estado día/noche según fase
+                esDeDia = (uDia > 0.35f);
+
+                // Título de la ventana con información actualizada y legible
+                int kilometrosPorHora = Math.round(Math.abs(auto.getVelocidad()) * 3.6f);
+                String txtLuces = farosEncendidos ? "Faros: ON" : "Faros: OFF";
+                String txtDia = esDeDia ? "Día" : "Noche";
+                String txtEntregas;
+                if (sistemaEntregas.isCompletado()) {
+                    txtEntregas = "¡GANASTE! (Entregas 3/3 completadas)";
+                } else {
+                    txtEntregas = "Entregas: " + sistemaEntregas.getEntregasCompletadas() + "/" + sistemaEntregas.getTotalEntregas() 
+                                + " [" + sistemaEntregas.getNombreDestinoActual() + "]";
+                }
+                glfwSetWindowTitle(ventana, String.format("Ciudad y Conducción | %d km/h | %s | %s | %s | [WASD: Manejar, C: Cámara, N: Día/Noche, F: Faros, M: Mapa, P: Ayuda, R: Reiniciar]",
+                    kilometrosPorHora, txtLuces, txtDia, txtEntregas));
 
                 float skyR, skyG, skyB;
                 float solR, solG, solB;
@@ -301,14 +314,14 @@ public class Motor {
                 Color colorCielo = Color.rgb(skyR, skyG, skyB);
                 Color colorSol = Color.rgb(solR, solG, solB);
 
-                // 1. Preparar la pantalla para el nuevo fotograma con el color del cielo (sin tocar OpenGL)
+                // 1. Preparar la pantalla para el nuevo fotograma con el color del cielo
                 renderizador.prepararEscena(ancho, alto, colorCielo);
                 renderizador.configurarTiempo((float) glfwGetTime());
 
                 // 2. Posicionar la cámara
                 float ojoX, ojoY, ojoZ, objetivoX, objetivoY, objetivoZ;
                 if (camaraAerea) {
-                    ojoX = -60; ojoY = 55; ojoZ = 60;
+                    ojoX = -60; ojoY = 70; ojoZ = 60;
                     objetivoX = 0; objetivoY = 0; objetivoZ = 0;
                 } else {
                     float distancia = 12f;
@@ -335,16 +348,17 @@ public class Motor {
                 float fZ = -(float) Math.cos(auto.getAngulo());
                 renderizador.configurarLuzVehiculo(0, auto.getX(), auto.getY(), auto.getZ(), fX, fZ, farosEncendidos);
                 
-                boolean farosNPC = (uDia < 0.3f);
+                boolean farosNPC = (uDia < 0.35f);
                 for (int i = 0; i < 3; i++) {
                     float nX = -(float) Math.sin(npcs[i].getAngulo());
                     float nZ = -(float) Math.cos(npcs[i].getAngulo());
                     renderizador.configurarLuzVehiculo(i + 1, npcs[i].getX(), npcs[i].getY(), npcs[i].getZ(), nX, nZ, farosNPC);
                 }
-                renderizador.configurarFarolas(entornoActual.getPosicionesFarolas());
+                renderizador.configurarFarolas(ciudad.getPosicionesFarolasCercanas(auto.getX(), auto.getZ()));
 
                 // 5. Dibujar la escena principal
-                entornoActual.dibujar(renderizador);
+                ciudad.dibujar(renderizador);
+                sistemaEntregas.dibujar(renderizador); // Baliza 3D de entrega
                 if (!auto.isDestruido()) autoModelo.dibujar(renderizador);
                 for (int i = 0; i < 3; i++) {
                     if (!npcs[i].isDestruido()) npcModelos[i].dibujar(renderizador);
@@ -353,10 +367,11 @@ public class Motor {
                     p.dibujar(renderizador);
                 }
 
-                // 6. Minimapa cenital (Totalmente encapsulado)
+                // 6. Minimapa cenital
                 if (mostrarMinimapa) {
                     renderizador.dibujarMinimapa(ancho, alto, () -> {
-                        entornoActual.dibujar(renderizador);
+                        ciudad.dibujar(renderizador);
+                        sistemaEntregas.dibujarMarcadorMinimapa(renderizador);
                         if (!auto.isDestruido()) autoModelo.dibujar(renderizador);
                         for (int i = 0; i < 3; i++) {
                             if (!npcs[i].isDestruido()) npcModelos[i].dibujar(renderizador);
@@ -364,18 +379,31 @@ public class Motor {
                         for (com.graphics.conduccion.Particula p : particulas) {
                             p.dibujar(renderizador);
                         }
-                        // Marcador de objetivo / destino en la plaza
-                        renderizador.marcadorMinimapa(85.0f, 20.0f, 0.0f, Color.MAGENTA);
                     });
                 }
 
-                // 7. Panel de control HUD (Velocímetro, vida, estado)
-                String zona = "CIUDAD";
-                if (entornoActual == pista) zona = "PISTA CARRERA";
-                if (entornoActual == monte) zona = "MONTE";
+                // 7. Panel de control HUD
+                String zona = "CENTRO URBANO";
+                float ax = auto.getX();
+                float az = auto.getZ();
+                if (ax < -15 && az < -40) zona = "DOWNTOWN NORTE";
+                else if (ax < -15 && az >= -40 && az <= 15) zona = "PLAZA DE LA CATEDRAL";
+                else if (ax < -15 && az > 15) zona = "PARQUE CENTRAL";
+                else if (Math.abs(ax) <= 15) zona = "PUENTES SOBRE EL CANAL";
+                else if (ax > 15 && az < 0) zona = "SECTOR RESIDENCIAL NORTE";
+                else if (ax > 15 && az >= 0) zona = "SECTOR RESIDENCIAL SUR";
                 
-                panelUI.actualizar(kilometrosPorHora, farosEncendidos, fase, zona, auto.getVida());
+                String estadoEntregasUI = sistemaEntregas.isCompletado() ? 
+                    "¡ENTREGAS COMPLETADAS!" : 
+                    ("ENTREGAS: " + sistemaEntregas.getEntregasCompletadas() + "/" + sistemaEntregas.getTotalEntregas());
+
+                panelUI.actualizar(kilometrosPorHora, farosEncendidos, fase, zona, auto.getVida(), estadoEntregasUI, sistemaEntregas.isCompletado());
                 panelUI.dibujar(renderizador, ancho, alto);
+
+                // 8. Menú / Superposición de ayuda de controles
+                if (mostrarAyuda) {
+                    menuAyuda.dibujar(renderizador, ancho, alto);
+                }
             }
             
             glfwSwapBuffers(ventana);
@@ -389,5 +417,3 @@ public class Motor {
         glfwTerminate();
     }
 }
-
-

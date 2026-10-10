@@ -8,7 +8,7 @@ public class Auto extends Objeto {
     protected float angulo = 0;
     private float velocidad = 0;
     private float velocidadY = 0;
-    private static final float RADIO_AUTO = 1.65f;
+    private static final float RADIO_AUTO = 1.35f;
     private Entorno entorno;
     
     // Sistema de Vida y Destruccion
@@ -52,7 +52,7 @@ public class Auto extends Objeto {
         float alturaSuelo = entorno.getAlturaSuelo(x, z);
         
         // Gravedad y salto
-        if (y > alturaSuelo || entorno.enAgua(x, z)) {
+        if (y > alturaSuelo) {
             velocidadY -= 30f * deltaTime; // Gravedad
             y += velocidadY * deltaTime;
             
@@ -60,23 +60,18 @@ public class Auto extends Objeto {
             x += -(float) Math.sin(angulo) * velocidad * deltaTime;
             z += -(float) Math.cos(angulo) * velocidad * deltaTime;
             
-            if (y <= alturaSuelo && !entorno.enAgua(x, z)) {
+            if (y <= alturaSuelo) {
                 y = alturaSuelo; // Aterrizó
                 if (velocidadY < -15f) {
-                    // Daño por caida fuerte
                     vida += velocidadY * 0.5f; 
                     if (vida <= 0) { vida = 0; destruido = true; }
                 }
                 velocidadY = 0;
             }
-            
-            if (y < -30) reiniciar();
-            return; // No se puede acelerar ni girar en el aire
+            return;
         } else if (y < alturaSuelo) {
-            // Subiendo rampa
             y = alturaSuelo;
-            // Para saltar, transferimos parte de la velocidad horizontal a vertical si la rampa termina
-            velocidadY = Math.abs(velocidad) * entorno.getPendienteSuelo(x, z);
+            velocidadY = 0;
         }
 
         float acelerador = 0;
@@ -179,6 +174,19 @@ public class Auto extends Objeto {
         velocidadY = 0;
         vida = 100.0f;
         destruido = false;
+    }
+
+    public void aplicarDanio(float danio) {
+        if (destruido) return;
+        this.vida -= danio;
+        if (this.vida <= 0) {
+            this.vida = 0;
+            this.destruido = true;
+        }
+    }
+
+    public void reducirVelocidadPorImpacto(float factor) {
+        this.velocidad *= factor;
     }
 
     public float getAngulo() { return angulo; }

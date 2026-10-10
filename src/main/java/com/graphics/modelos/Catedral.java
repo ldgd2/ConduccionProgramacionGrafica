@@ -48,4 +48,14 @@ public class Catedral extends Objeto {
     public boolean esColisionable() {
         return true;
     }
+
+    @Override
+    public float getRadioColisionX() {
+        return 2.2f;
+    }
+
+    @Override
+    public float getRadioColisionZ() {
+        return 3.0f;
+    }
 }

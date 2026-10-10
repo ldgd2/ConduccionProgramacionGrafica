@@ -67,5 +67,15 @@ public class Edificio extends Objeto {
     public boolean esColisionable() {
         return true;
     }
+
+    @Override
+    public float getRadioColisionX() {
+        return 2.4f; // Permite subir y circular por la banqueta; colisiona solo contra la pared física
+    }
+
+    @Override
+    public float getRadioColisionZ() {
+        return 2.4f;
+    }
 }
 

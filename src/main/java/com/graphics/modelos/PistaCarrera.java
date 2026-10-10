@@ -8,7 +8,7 @@ import java.util.List;
 
 public class PistaCarrera implements Entorno {
     private List<Objeto> objetos = new ArrayList<>();
-    private float[] posicionesFarolas = new float[27];
+    private float[] posicionesFarolas = new float[96];
 
     public PistaCarrera() {
         // Pista base plana

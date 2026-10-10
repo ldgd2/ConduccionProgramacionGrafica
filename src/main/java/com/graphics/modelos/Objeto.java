@@ -40,7 +40,7 @@ public abstract class Objeto {
     protected static final Color METAL_OSCURO = Color.METAL_OSCURO;
     protected static final Color AGUA = Color.AGUA;
 
-    // Métodos para crear colores personalizados sin importar nada
+   
     protected static Color rgb(float r, float g, float b) { return Color.rgb(r, g, b); }
     protected static Color rgb(int r, int g, int b) { return Color.rgb(r, g, b); }
     protected static Color rgba(int r, int g, int b, int a) { return Color.rgba(r, g, b, a); }
@@ -67,7 +67,6 @@ public abstract class Objeto {
     }
 
     public void actualizar(float deltaTime) {
-        // Por defecto no hace nada
     }
 
     /**
@@ -77,16 +76,10 @@ public abstract class Objeto {
         dibujar(renderizador.en(this));
     }
 
-    /**
-     * Dibuja el objeto utilizando un Pincel humano de alto nivel.
-     * Sobrescribir este método permite dibujar figuras en coordenadas locales (0, 0, 0)
-     * sin preocuparse por la matemática de OpenGL ni por la posición absoluta del mundo.
-     */
     public void dibujar(com.graphics.core.Pincel pincel) {
-        // Por defecto no dibuja nada
+
     }
 
-    /** Retorna un pincel centrado en este objeto */
     public com.graphics.core.Pincel pincel(Renderizador r) {
         return r.en(this);
     }
@@ -96,12 +89,21 @@ public abstract class Objeto {
         return false;
     }
 
+    public float getRadioColisionX() {
+        return 3.5f;
+    }
+
+    public float getRadioColisionZ() {
+        return 3.5f;
+    }
+
     public boolean colisiona(Objeto objeto) {
         if (!esColisionable()) return false;
         
-        // Logica base (Manzana 10x10) centrada en (x, z)
-        float cercaX = Math.max(x - 5, Math.min(objeto.getX(), x + 5));
-        float cercaZ = Math.max(z - 5, Math.min(objeto.getZ(), z + 5));
+        float rx = getRadioColisionX();
+        float rz = getRadioColisionZ();
+        float cercaX = Math.max(x - rx, Math.min(objeto.getX(), x + rx));
+        float cercaZ = Math.max(z - rz, Math.min(objeto.getZ(), z + rz));
         float distanciaX = objeto.getX() - cercaX;
         float distanciaZ = objeto.getZ() - cercaZ;
         return (distanciaX * distanciaX + distanciaZ * distanciaZ) < (objeto.getRadio() * objeto.getRadio());

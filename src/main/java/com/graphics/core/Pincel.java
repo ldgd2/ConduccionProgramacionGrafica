@@ -133,6 +133,14 @@ public class Pincel {
 
     // ==================== PRIMITIVAS BÁSICAS ====================
 
+    private float escala = 1.0f;
+
+    /** Define el factor de escala uniforme del pincel */
+    public Pincel escalar(float escala) {
+        this.escala = Math.max(escala, 0.0f);
+        return this;
+    }
+
     /**
      * Dibuja una caja 3D en posición local relativa al pincel con un color.
      */
@@ -144,23 +152,31 @@ public class Pincel {
      * Dibuja una caja 3D en posición local con rotación propia adicional.
      */
     public Pincel caja(float dx, float dy, float dz, float sx, float sy, float sz, Color color, float anguloAdicional) {
+        if (escala <= 0.001f) return this;
         float rotTotal = anguloBase + anguloAdicional;
         
+        float locX = dx * escala;
+        float locY = dy * escala;
+        float locZ = dz * escala;
+        float dimX = sx * escala;
+        float dimY = sy * escala;
+        float dimZ = sz * escala;
+
         // Aplicar rotación respecto al origen base si el pincel tiene rotación
         float finalX = ox;
         float finalZ = oz;
         if (anguloBase != 0) {
             float cos = (float) Math.cos(anguloBase);
             float sin = (float) Math.sin(anguloBase);
-            finalX += dx * cos + dz * sin;
-            finalZ += -dx * sin + dz * cos;
+            finalX += locX * cos + locZ * sin;
+            finalZ += -locX * sin + locZ * cos;
         } else {
-            finalX += dx;
-            finalZ += dz;
+            finalX += locX;
+            finalZ += locZ;
         }
-        float finalY = oy + dy;
+        float finalY = oy + locY;
 
-        render.cajaGirada(finalX, finalY, finalZ, sx, sy, sz, color.r(), color.g(), color.b(), rotTotal);
+        render.cajaGirada(finalX, finalY, finalZ, dimX, dimY, dimZ, color.r(), color.g(), color.b(), rotTotal);
         return this;
     }
 

@@ -107,7 +107,13 @@ public class Renderizador {
      * Pasa las posiciones de las farolas del mapa al sistema de iluminación.
      */
     public void configurarFarolas(float[] posiciones) {
-        vectorArray("uFarolas", posiciones);
+        if (posiciones.length == 96) {
+            vectorArray("uFarolas", posiciones);
+        } else {
+            float[] buffer = new float[96];
+            System.arraycopy(posiciones, 0, buffer, 0, Math.min(posiciones.length, 96));
+            vectorArray("uFarolas", buffer);
+        }
     }
 
     /**
@@ -167,6 +173,26 @@ public class Renderizador {
         entero("uHUD", 0);
     }
 
+
+    public void dibujarHUDCentrado(int texturaId, int pantallaAncho, int pantallaAlto, float hudAncho, float hudAlto) {
+        glViewport(0, 0, pantallaAncho, pantallaAlto);
+        entero("uHUD", 1);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texturaId);
+        entero("texHUD", 0);
+
+        float hudAspect = hudAncho / hudAlto;
+        float screenAspect = (float) pantallaAncho / Math.max(1, pantallaAlto);
+        float sizeY = 0.75f;
+        float sizeX = sizeY * hudAspect / screenAspect;
+
+        vector("uOjo", 0, 0, 0);
+        caja(0, 0, 0, sizeX, sizeY, 0.001f, Color.BLANCO);
+
+        entero("uHUD", 0);
+    }
+
     // ==================== PRIMITIVAS 3D (CAJAS Y RAMPAS) ====================
     public void caja(float x, float y, float z, float sx, float sy, float sz, float r, float g, float b) {
         cajaGirada(x, y, z, sx, sy, sz, r, g, b, 0);
@@ -201,7 +227,7 @@ public class Renderizador {
         caja(x, y, z, lado, lado, lado, color);
     }
 
-    // ==================== ILUMINACIÓN HUMANA ====================
+
     public void brillar() {
         entero("uEmitirLuz", 1);
     }
@@ -214,7 +240,7 @@ public class Renderizador {
         entero("uEmitirLuz", 0);
     }
 
-    // ==================== PINCELES DE DIBUJO ====================
+
     public Pincel pincel() {
         return new Pincel(this);
     }
@@ -411,7 +437,7 @@ public class Renderizador {
             uniform vec3 uPosAutos[4];
             uniform vec3 uDirAutos[4];
             uniform float uFarosAutos[4];
-            uniform vec3 uFarolas[9];
+            uniform vec3 uFarolas[32];
             uniform vec3 uOjo;
             uniform int uEmitirLuz;
             uniform int uHUD;
@@ -457,16 +483,24 @@ public class Renderizador {
                 float difusaLuna = max(dot(n, normalize(uDirLuna)), 0.0);
                 vec3 luzLuna = vec3(0.2, 0.25, 0.4) * difusaLuna * (1.0 - uDia);
 
-                // Farolas (Puntuales)
+                // Farolas (Puntuales en calles, avenidas e intersecciones)
                 vec3 luzFarolas = vec3(0.0);
-                for(int i = 0; i < 9; i++) {
-                    vec3 posFarola = uFarolas[i];
-                    if (posFarola.y > -10.0) {
-                        float distancia = length(posFarola - vMundo);
-                        float atenuacion = 1.0 / (1.0 + 0.07 * distancia + 0.015 * distancia * distancia);
-                        vec3 dirLuz = normalize(posFarola - vMundo);
-                        float difusa = max(dot(n, dirLuz), 0.0);
-                        luzFarolas += vec3(1.0, 0.85, 0.5) * difusa * atenuacion * (1.0 - uDia);
+                float factorNocheFarola = smoothstep(0.55, 0.15, uDia); // Totalmente apagadas de día, encendidas de noche
+                if (factorNocheFarola > 0.001) {
+                    for(int i = 0; i < 32; i++) {
+                        vec3 posFarola = uFarolas[i];
+                        if (posFarola.y > -10.0) {
+                            vec3 delta = posFarola - vMundo;
+                            float distancia = length(delta);
+                            if (distancia < 45.0) {
+                                float atenuacion = 1.0 / (1.0 + 0.035 * distancia + 0.002 * distancia * distancia);
+                                vec3 dirLuz = normalize(delta);
+                                float difusa = max(dot(n, dirLuz), 0.0);
+                                float rebote = clamp(1.0 - distancia / 25.0, 0.0, 1.0) * 0.10;
+                                vec3 colorFarola = vec3(1.0, 0.85, 0.62); // Iluminación cálida y nítida sin saturación
+                                luzFarolas += colorFarola * (difusa + rebote) * atenuacion * factorNocheFarola;
+                            }
+                        }
                     }
                 }
 

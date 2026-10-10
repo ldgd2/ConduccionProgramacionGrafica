@@ -10,4 +10,8 @@ public interface Entorno {
     float getAlturaSuelo(float px, float pz);
     float getPendienteSuelo(float px, float pz);
     float[] getPosicionesFarolas();
+    default float[] getPosicionesFarolasCercanas(float px, float pz) {
+        return getPosicionesFarolas();
+    }
+    default void verificarImpactosDestructibles(com.graphics.conduccion.Auto auto, java.util.List<com.graphics.conduccion.Particula> particulas) {}
 }

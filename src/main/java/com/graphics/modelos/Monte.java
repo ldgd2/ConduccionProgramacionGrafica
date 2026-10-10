@@ -10,7 +10,7 @@ public class Monte implements Entorno {
     private int numVertices = 0;
     private static final float TAMANO = 300f;
     private static final int DIVISIONES = 100;
-    private float[] posicionesFarolas = new float[27];
+    private float[] posicionesFarolas = new float[96];
 
     public Monte(Renderizador renderizador) {
         generarTerreno(renderizador);
