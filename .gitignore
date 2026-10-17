@@ -1,3 +1,6 @@
 target/
 .DS_Store
-documentacion/generar_pdf.py
+documentacion/*.py
+documentacion/secciones/*
+__pycache__/
+*.pyc
